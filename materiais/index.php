@@ -32,8 +32,7 @@ try {
 
     // Constrói a consulta dinâmica com Prepared Statements
     $sql = "
-        SELECT m.id, m.titulo, m.assunto, m.descricao, m.link_externo, m.resumo_ia, m.criado_em,
-               m.usuario_id,
+        SELECT m.*,
                mat.nome AS materia_nome,
                u.nome AS professor_nome
         FROM materiais m
@@ -149,11 +148,18 @@ require_once __DIR__ . '/../includes/header.php';
                         <span class="badge-role badge-aluno">
                             <?= e($item['materia_nome']) ?>
                         </span>
-                        <?php if (!empty($item['resumo_ia'])): ?>
-                            <span style="font-size: 0.75rem; background: #dcfce7; color: #166534; padding: 0.15rem 0.5rem; border-radius: 9999px; font-weight: 600;">
-                                ✦ IA
-                            </span>
-                        <?php endif; ?>
+                        <div style="display: flex; gap: 0.35rem; align-items: center;">
+                            <?php if (!empty($item['arquivo_pdf'])): ?>
+                                <span style="font-size: 0.75rem; background: #e0e7ff; color: #3730a3; padding: 0.15rem 0.5rem; border-radius: 9999px; font-weight: 600;">
+                                    📄 PDF
+                                </span>
+                            <?php endif; ?>
+                            <?php if (!empty($item['resumo_ia'])): ?>
+                                <span style="font-size: 0.75rem; background: #dcfce7; color: #166534; padding: 0.15rem 0.5rem; border-radius: 9999px; font-weight: 600;">
+                                    ✦ IA
+                                </span>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
                     <h2 style="font-size: 1.2rem; color: var(--text-main); font-weight: 700; margin-bottom: 0.35rem;">

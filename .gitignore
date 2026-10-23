@@ -1,0 +1,13 @@
+﻿/config/local_env.php
+/config/local_env.*.php
+!/config/local_env.example.php
+/uploads/*
+!/uploads/index.html
+!/uploads/.htaccess
+!/uploads/materiais/
+/uploads/materiais/*
+!/uploads/materiais/.htaccess
+!/uploads/materiais/index.html
+!/uploads/materiais/.gitkeep
+*.log
+*.tmp

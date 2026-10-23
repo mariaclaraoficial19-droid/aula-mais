@@ -63,5 +63,27 @@ O formato baseia-se no [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0
 - **Interface e Feedback em `materiais/visualizar.php`:** Integração do botão de acionamento do resumo, visualização com formatação limpa e tratamento tolerante a falhas (exibe aviso amigável sem quebrar o acesso ao material didático caso o serviço externo esteja offline ou a chave não esteja configurada).
 - **Modelo de Ambiente Local (`config/local_env.example.php`):** Arquivo modelo documentando como declarar a chave `GEMINI_API_KEY` de forma segura, mantendo-a fora do controle de versão do Git.
 
+## [0.5.0] - 2026-10-23
+
+### Adicionado (Anexos em PDF e Gestão de Documentos)
+- **Anexo de Arquivos PDF (até 10 MB):** Suporte completo para anexar documentos em formato PDF aos materiais de estudo com funcionamento 100% independente dos campos de conteúdo textual e links externos.
+- **Validação Rigorosa de Uploads (`includes/security.php`):**
+  - Limite estrito de 10 MB (`10.485.760 bytes`).
+  - Verificação de extensão (.pdf) e tipo MIME (`application/pdf`) via `finfo`.
+  - Verificação binária da assinatura/cabeçalho oficial do documento (`%PDF-`).
+  - Nomes de arquivos físicos criptograficamente aleatórios (`bin2hex(random_bytes(16)) . '.pdf'`) para evitar colisões e path traversal.
+  - Sanitização de cabeçalhos de download para o nome original.
+- **Proteção do Diretório de Uploads (`uploads/materiais/`):**
+  - Diretiva `.htaccess` bloqueando acesso HTTP direto e execução de qualquer script interpretado (`php_flag engine off`, `Require all denied`).
+  - Fallback defensivo com `index.html` estático e rota segura controlada em `materiais/download.php`.
+- **Rota Segura de Download/Visualização (`materiais/download.php`):**
+  - Validação estrita de ID e verificação de integridade de caminho no disco com `realpath()` para mitigar *Directory Traversal*.
+  - Entrega segura com cabeçalhos `X-Content-Type-Options: nosniff` e suporte aos modos de visualização inline e download direto.
+- **Script de Migração Não Destrutivo (`database/migration_001_add_pdf_to_materiais.sql`):** Adição segura das colunas `arquivo_pdf`, `arquivo_pdf_nome_original` e `arquivo_pdf_tamanho` na tabela `materiais`.
+- **Gestão de Ciclo de Vida do Arquivo na Edição e Exclusão:**
+  - Na edição, o arquivo antigo só é excluído do disco após a confirmação do commit no banco de dados. Caso ocorra erro no salvamento, o novo arquivo é descartado e o antigo é preservado.
+  - Opção para o professor remover o anexo PDF existente sem excluir o material.
+  - Na exclusão do material pelo autor, o arquivo anexo associado é limpo do sistema de arquivos.
+
 
 

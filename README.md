@@ -54,23 +54,27 @@ aula_mais/
 │   ├── local_env.php     # (Opcional) Credenciais locais protegidas no .gitignore
 │   └── test_connection.php # Diagnóstico visual/CLI de conexão com o banco
 ├── database/             # Scripts do banco de dados
-│   └── schema.sql        # Criação não destrutiva do banco e tabelas relacionais
+│   ├── schema.sql        # Criação não destrutiva do banco e tabelas relacionais
+│   └── migration_001_add_pdf_to_materiais.sql # Migração manual para suporte a anexos PDF
 ├── dashboard/            # Painel principal do sistema
 │   └── index.php         # Visões diferenciadas para Alunos e Professores
 ├── includes/             # Componentes reutilizáveis
 │   ├── header.php        # Cabeçalho HTML5 e exibição de alertas flash
 │   ├── footer.php        # Rodapé institucional do IFRO
 │   ├── nav.php           # Barra de navegação responsiva e adaptável
-│   └── security.php      # Sessão segura, CSRF, sanitização e permissões
+│   └── security.php      # Sessão segura, CSRF, validação de PDF e permissões
 ├── materias/             # Módulo de disciplinas
 │   ├── index.php         # Catálogo de matérias e contagem de materiais
 │   └── cadastrar.php     # Cadastro de novas matérias (exclusivo para professores)
 ├── materiais/            # Módulo de materiais de estudo
 │   ├── index.php         # Busca multifiltro e catálogo geral
-│   ├── visualizar.php    # Visualização de notas de aula, links e resumo IA
-│   ├── cadastrar.php     # Cadastro de material vinculado ao professor
-│   ├── editar.php        # Edição autorizada exclusiva do autor
-│   └── excluir.php       # Exclusão segura com CSRF exclusiva do autor
+│   ├── visualizar.php    # Visualização de notas de aula, links, PDFs e resumo IA
+│   ├── cadastrar.php     # Cadastro de material com texto, link e/ou anexo PDF
+│   ├── editar.php        # Edição autorizada exclusiva do autor (substituição/remoção)
+│   ├── download.php      # Rota segura de download/visualização de PDFs (anti-traversal)
+│   └── excluir.php       # Exclusão segura com CSRF e limpeza de arquivos do disco
+├── uploads/              # Armazenamento protegido de arquivos
+│   └── materiais/        # Anexos em PDF com acesso direto bloqueado por .htaccess
 ├── public/               # Ativos estáticos públicos
 │   ├── css/style.css     # Folha de estilos semântica e responsiva
 │   └── js/main.js        # Confirmações e interações do front-end
@@ -105,6 +109,15 @@ Para rodar este projeto em qualquer máquina com Windows (ou Linux/macOS):
 4. Clique no **ícone de raio ⚡** para executar o script.
    * Ele criará de forma declarativa o banco de dados `aula_mais` e as tabelas `usuarios`, `materias` e `materiais`.
    * O script é **não destrutivo** (`CREATE TABLE IF NOT EXISTS`), sem comandos `DROP`.
+
+#### Atualização para Bancos Já Existentes (Migração Manual):
+Se você já possui o banco `aula_mais` criado em versão anterior, execute apenas o script de migração:
+1. Abra o **MySQL Workbench** ou phpMyAdmin.
+2. Abra e execute o arquivo:
+   ```text
+   database/migration_001_add_pdf_to_materiais.sql
+   ```
+   * Ele adiciona as colunas `arquivo_pdf`, `arquivo_pdf_nome_original` e `arquivo_pdf_tamanho` na tabela `materiais` sem alterar os dados existentes.
 
 ---
 

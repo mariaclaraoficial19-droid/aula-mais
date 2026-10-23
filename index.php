@@ -24,7 +24,7 @@ try {
 
     // Consulta os 6 materiais mais recentes com os nomes da matéria e do professor autor
     $sqlRecentes = "
-        SELECT m.id, m.titulo, m.assunto, m.descricao, m.criado_em,
+        SELECT m.*,
                mat.nome AS materia_nome,
                u.nome AS professor_nome
         FROM materiais m
@@ -118,9 +118,16 @@ require_once __DIR__ . '/includes/header.php';
             <?php foreach ($materiaisRecentes as $mat): ?>
                 <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
                     <div>
-                        <span class="badge-role badge-aluno" style="margin-bottom: 0.5rem; display: inline-block;">
-                            <?= e($mat['materia_nome']) ?>
-                        </span>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+                            <span class="badge-role badge-aluno">
+                                <?= e($mat['materia_nome']) ?>
+                            </span>
+                            <?php if (!empty($mat['arquivo_pdf'])): ?>
+                                <span style="font-size: 0.75rem; background: #e0e7ff; color: #3730a3; padding: 0.15rem 0.5rem; border-radius: 9999px; font-weight: 600;">
+                                    📄 PDF
+                                </span>
+                            <?php endif; ?>
+                        </div>
                         <h3 style="font-size: 1.15rem; margin-bottom: 0.5rem; color: var(--text-main);">
                             <?= e($mat['titulo']) ?>
                         </h3>

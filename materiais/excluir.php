@@ -47,7 +47,7 @@ try {
     $pdo = getDatabaseConnection();
 
     // 2. Verifica se o material existe e se o usuário logado é o autor (RNF06)
-    $stmtCheck = $pdo->prepare("SELECT id, titulo, usuario_id FROM materiais WHERE id = :id LIMIT 1");
+    $stmtCheck = $pdo->prepare("SELECT id, titulo, usuario_id, arquivo_pdf FROM materiais WHERE id = :id LIMIT 1");
     $stmtCheck->execute([':id' => $id]);
     $material = $stmtCheck->fetch();
 
@@ -70,6 +70,11 @@ try {
         ':id'         => $id,
         ':usuario_id' => $usuario['id']
     ]);
+
+    // 4. Somente após a confirmação do DELETE no banco, remove o arquivo PDF físico (evita arquivos órfãos)
+    if (!empty($material['arquivo_pdf'])) {
+        excluirArquivoPdfFisico((string)$material['arquivo_pdf']);
+    }
 
     setFlashMessage('sucesso', 'O material "' . $material['titulo'] . '" foi excluído com sucesso.');
 } catch (Throwable $e) {

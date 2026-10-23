@@ -39,7 +39,7 @@ try {
         $totalMeusMateriais = (int)$stmtMeusCount->fetchColumn();
 
         $stmtMeus = $pdo->prepare("
-            SELECT m.id, m.titulo, m.assunto, m.criado_em, m.resumo_ia,
+            SELECT m.*,
                    mat.nome AS materia_nome
             FROM materiais m
             INNER JOIN materias mat ON m.materia_id = mat.id
@@ -51,7 +51,7 @@ try {
     } else {
         // Área do aluno: materiais mais recentes para estudo
         $stmtRecentes = $pdo->query("
-            SELECT m.id, m.titulo, m.assunto, m.descricao, m.criado_em,
+            SELECT m.*,
                    mat.nome AS materia_nome,
                    u.nome AS professor_nome
             FROM materiais m
@@ -180,6 +180,9 @@ require_once __DIR__ . '/../includes/header.php';
                             <tr>
                                 <td>
                                     <strong><?= e($item['titulo']) ?></strong>
+                                    <?php if (!empty($item['arquivo_pdf'])): ?>
+                                        <span style="font-size: 0.7rem; background: #e0e7ff; color: #3730a3; padding: 0.1rem 0.4rem; border-radius: 4px; font-weight: 600; margin-left: 0.35rem;">PDF</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td><span class="badge-role badge-aluno"><?= e($item['materia_nome']) ?></span></td>
                                 <td><?= e($item['assunto']) ?></td>

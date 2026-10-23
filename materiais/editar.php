@@ -1,7 +1,7 @@
 <?php
 /**
  * Edição de Material de Estudo — Exclusivo para o Professor Autor — Sistema Aula+ (IFRO)
- * 
+ *
  * Implementa:
  * - RF09: Edição de dados do material
  * - RNF02: Validação no servidor
@@ -106,37 +106,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erros[] = 'O link externo informado não é uma URL válida.';
     }
 
+    // Validação de PDF (substituição ou manutenção)
+    $validacaoPdf = validarUploadPdf($_FILES['arquivo_pdf'] ?? null);
+    if ($validacaoPdf['tem_arquivo'] && !$validacaoPdf['valido']) {
+        $erros[] = $validacaoPdf['erro'];
+    }
+
+    $removerPdf = !empty($_POST['remover_pdf']);
+
     // 3. Atualização no Banco via PDO Prepared Statement
     if (empty($erros)) {
+        $novoArquivoSalvo = null;
+        $arquivoAntigoParaExcluir = null;
+
         try {
+            $colunaArquivoPdf         = $material['arquivo_pdf'];
+            $colunaArquivoNome        = $material['arquivo_pdf_nome_original'];
+            $colunaArquivoTamanho     = $material['arquivo_pdf_tamanho'];
+
+            if ($validacaoPdf['tem_arquivo']) {
+                // Caso 1: Professor enviou um novo arquivo PDF para anexar ou substituir
+                $novoArquivoSalvo = salvarUploadPdf($_FILES['arquivo_pdf']);
+                $colunaArquivoPdf     = $novoArquivoSalvo;
+                $colunaArquivoNome    = $validacaoPdf['nome_original'];
+                $colunaArquivoTamanho = $validacaoPdf['tamanho'];
+
+                // Marca o arquivo antigo para ser excluído SOMENTE após o sucesso da gravação no banco
+                if (!empty($material['arquivo_pdf'])) {
+                    $arquivoAntigoParaExcluir = (string)$material['arquivo_pdf'];
+                }
+            } elseif ($removerPdf) {
+                // Caso 2: Professor solicitou a remoção do PDF existente
+                $colunaArquivoPdf     = null;
+                $colunaArquivoNome    = null;
+                $colunaArquivoTamanho = null;
+
+                if (!empty($material['arquivo_pdf'])) {
+                    $arquivoAntigoParaExcluir = (string)$material['arquivo_pdf'];
+                }
+            }
+
             $sqlUpdate = "
                 UPDATE materiais
-                SET materia_id   = :materia_id,
-                    titulo       = :titulo,
-                    assunto      = :assunto,
-                    descricao    = :descricao,
-                    conteudo     = :conteudo,
-                    link_externo = :link_externo
+                SET materia_id                = :materia_id,
+                    titulo                    = :titulo,
+                    assunto                   = :assunto,
+                    descricao                 = :descricao,
+                    conteudo                  = :conteudo,
+                    link_externo              = :link_externo,
+                    arquivo_pdf               = :arquivo_pdf,
+                    arquivo_pdf_nome_original = :arquivo_pdf_nome_original,
+                    arquivo_pdf_tamanho       = :arquivo_pdf_tamanho
                 WHERE id = :id AND usuario_id = :usuario_id
             ";
             $stmtUpdate = $pdo->prepare($sqlUpdate);
             $stmtUpdate->execute([
-                ':materia_id'   => $materiaId,
-                ':titulo'       => $titulo,
-                ':assunto'      => $assunto,
-                ':descricao'    => $descricao,
-                ':conteudo'     => !empty($conteudo) ? $conteudo : null,
-                ':link_externo' => !empty($linkExterno) ? $linkExterno : null,
-                ':id'           => $id,
-                ':usuario_id'   => $usuario['id']
+                ':materia_id'                => $materiaId,
+                ':titulo'                    => $titulo,
+                ':assunto'                   => $assunto,
+                ':descricao'                 => $descricao,
+                ':conteudo'                  => !empty($conteudo) ? $conteudo : null,
+                ':link_externo'              => !empty($linkExterno) ? $linkExterno : null,
+                ':arquivo_pdf'               => $colunaArquivoPdf,
+                ':arquivo_pdf_nome_original' => $colunaArquivoNome,
+                ':arquivo_pdf_tamanho'       => $colunaArquivoTamanho,
+                ':id'                        => $id,
+                ':usuario_id'                => $usuario['id']
             ]);
+
+            // Confirmação: banco atualizado com sucesso. Agora é seguro remover o arquivo antigo físico.
+            if ($arquivoAntigoParaExcluir !== null) {
+                excluirArquivoPdfFisico($arquivoAntigoParaExcluir);
+            }
 
             setFlashMessage('sucesso', 'Material de estudo atualizado com sucesso!');
             header('Location: ' . $basePath . '/materiais/visualizar.php?id=' . $id);
             exit;
         } catch (Throwable $e) {
+            // Se ocorreu falha na persistência, remove apenas o novo arquivo recém-salvo desta requisição
+            if ($novoArquivoSalvo !== null) {
+                excluirArquivoPdfFisico($novoArquivoSalvo);
+            }
             error_log("Erro ao atualizar material #$id: " . $e->getMessage());
-            $erros[] = 'Erro ao atualizar os dados no banco de dados.';
+            $erros[] = 'Erro ao atualizar os dados no banco de dados. Caso a migração das colunas de PDF não tenha sido executada, atualize o banco.';
         }
     }
 }
@@ -165,7 +217,7 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
         <?php endif; ?>
 
-        <form action="<?= e($basePath . '/materiais/editar.php?id=' . $id) ?>" method="POST">
+        <form action="<?= e($basePath . '/materiais/editar.php?id=' . $id) ?>" method="POST" enctype="multipart/form-data">
             <?= campoCsrf() ?>
 
             <div class="form-group">
@@ -182,20 +234,20 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="grid-2">
                 <div class="form-group">
                     <label for="titulo" class="form-label">Título do Material *</label>
-                    <input type="text" id="titulo" name="titulo" class="form-control" 
+                    <input type="text" id="titulo" name="titulo" class="form-control"
                            value="<?= e($titulo) ?>" required>
                 </div>
 
                 <div class="form-group">
                     <label for="assunto" class="form-label">Assunto Específico / Tópico *</label>
-                    <input type="text" id="assunto" name="assunto" class="form-control" 
+                    <input type="text" id="assunto" name="assunto" class="form-control"
                            value="<?= e($assunto) ?>" required>
                 </div>
             </div>
 
             <div class="form-group">
                 <label for="descricao" class="form-label">Breve Descrição *</label>
-                <textarea id="descricao" name="descricao" class="form-control" style="min-height: 80px;" 
+                <textarea id="descricao" name="descricao" class="form-control" style="min-height: 80px;"
                           required><?= e($descricao) ?></textarea>
             </div>
 
@@ -206,8 +258,37 @@ require_once __DIR__ . '/../includes/header.php';
 
             <div class="form-group">
                 <label for="link_externo" class="form-label">Link Externo de Apoio</label>
-                <input type="url" id="link_externo" name="link_externo" class="form-control" 
+                <input type="url" id="link_externo" name="link_externo" class="form-control"
                        value="<?= e($linkExterno) ?>">
+            </div>
+
+            <div class="form-group" style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1.25rem;">
+                <label class="form-label" style="font-weight: 700; color: var(--primary);">Documento Anexo em PDF (Opcional — até 10 MB)</label>
+
+                <?php if (!empty($material['arquivo_pdf'])): ?>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.75rem; background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+                        <div>
+                            <span style="font-weight: 600; color: var(--text-main);">📄 <?= e($material['arquivo_pdf_nome_original']) ?></span>
+                            <span style="font-size: 0.85rem; color: var(--text-muted); margin-left: 0.5rem;">(<?= formatarTamanhoBytes((int)$material['arquivo_pdf_tamanho']) ?>)</span>
+                        </div>
+                        <a href="<?= e($basePath . '/materiais/download.php?id=' . $id) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary">
+                            Visualizar PDF Atual
+                        </a>
+                    </div>
+
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--danger-text); cursor: pointer; font-size: 0.95rem;">
+                            <input type="checkbox" name="remover_pdf" value="1">
+                            <span>Excluir e remover este anexo em PDF</span>
+                        </label>
+                    </div>
+                <?php endif; ?>
+
+                <label for="arquivo_pdf" class="form-label" style="font-size: 0.9rem;">
+                    <?= !empty($material['arquivo_pdf']) ? 'Substituir por outro arquivo PDF:' : 'Enviar arquivo PDF:' ?>
+                </label>
+                <input type="file" id="arquivo_pdf" name="arquivo_pdf" class="form-control" accept=".pdf,application/pdf">
+                <div class="form-help">Apenas arquivos .pdf são aceitos (tamanho máximo: 10 MB).</div>
             </div>
 
             <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">

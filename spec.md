@@ -71,10 +71,10 @@ O sistema possui dois perfis de usuários distintos, com níveis de acesso e aut
 | **RF03** | O sistema deve permitir o encerramento da sessão ativa do usuário, invalidando a sessão no servidor e redirecionando para a tela de login. | UC03 | Teste de logout e verificação de bloqueio ao tentar acessar rota restrita posteriormente. |
 | **RF04** | O sistema deve permitir que usuários com perfil de professor cadastrem novas matérias informando nome (obrigatório e único) e descrição (opcional). | UC04 | Teste de cadastro por professor e tentativa de cadastro por aluno (bloqueio 403). |
 | **RF05** | O sistema deve listar todas as matérias cadastradas, indicando a quantidade de materiais associados a cada uma. | UC05 | Teste de renderização da listagem com contagem de materiais. |
-| **RF06** | O sistema deve permitir que professores cadastrem materiais de estudo contendo: Matéria associada, Título, Assunto, Descrição, Conteúdo textual e/ou Link externo. | UC06 | Teste de cadastro de material com validação de campos obrigatórios. |
+| **RF06** | O sistema deve permitir que professores cadastrem materiais de estudo contendo: Matéria associada, Título, Assunto, Descrição, e opções independentes de Conteúdo textual, Link externo e/ou Anexo em PDF de até 10 MB. | UC06 | Teste de cadastro de material com validação de campos obrigatórios e independência entre texto, link e PDF. |
 | **RF07** | O sistema deve associar automaticamente o material cadastrado ao ID do usuário autenticado (professor autor). | UC06 | Verificação no banco de dados da coluna `usuario_id` preenchida com a sessão atual. |
 | **RF08** | O sistema deve permitir a busca de materiais através de filtros combinados: termo textual (que busca em título, assunto e descrição) e seleção de matéria. | UC07 | Teste de busca com palavras-chave exatas, parciais e filtros vazios. |
-| **RF09** | O sistema deve permitir que o professor autor edite os dados de seu material de estudo (título, assunto, descrição, conteúdo e link). | UC08 | Teste de edição pelo autor e tentativa de edição por outro usuário. |
+| **RF09** | O sistema deve permitir que o professor autor edite os dados de seu material de estudo (título, assunto, descrição, conteúdo, link e anexo PDF com opção de substituição ou remoção segura). | UC08 | Teste de edição pelo autor, manipulação de anexo e tentativa de edição por outro usuário. |
 | **RF10** | O sistema deve permitir que o professor autor exclua seu material de estudo mediante confirmação na interface. | UC09 | Teste de exclusão com modal de confirmação e verificação de remoção no banco. |
 | **RF11** | O sistema deve oferecer um botão para gerar resumo por IA com base no conteúdo textual e descrição do material de estudo, armazenando o resultado gerado. | UC10 | Teste de chamada à API de IA e gravação do campo `resumo_ia`. |
 | **RF12** | O sistema deve tratar falhas ou indisponibilidade da API de IA exibindo alerta informativo amigável, sem impedir o acesso e navegação pelo material. | UC10 | Simulação de timeout/erro HTTP na API de IA e teste de resiliência. |
@@ -87,7 +87,7 @@ O sistema possui dois perfis de usuários distintos, com níveis de acesso e aut
 | ID | Requisito Não Funcional | Detalhamento Técnico e Justificativa |
 | :--- | :--- | :--- |
 | **RNF01** | **Armazenamento de Senhas com Hash Seguro** | As senhas nunca devem ser salvas em texto puro. O sistema deve utilizar obrigatoriamente a função nativa `password_hash()` com algoritmo padrão (Bcrypt ou Argon2id) e a verificação estrita via `password_verify()`. |
-| **RNF02** | **Validação Completa no Servidor** | Todos os formulários recebidos devem passar por validação rigorosa no servidor (sanitização de strings, validação de formato de e-mail com `filter_var`, limites de tamanho e verificação de tipos). A validação em JavaScript no front-end é apenas auxiliar. |
+| **RNF02** | **Validação Completa no Servidor** | Todos os formulários recebidos devem passar por validação rigorosa no servidor (sanitização de strings, validação de formato de e-mail com `filter_var`, limites de tamanho e verificação de tipos). Para uploads de anexos (PDF), valida-se limite de 10 MB, extensão `.pdf`, verificação real de MIME type (`application/pdf`) via `finfo` e checagem de assinatura de arquivo (`%PDF-`). A validação em JavaScript no front-end é apenas auxiliar. |
 | **RNF03** | **Prevenção contra SQL Injection via PDO** | Toda interação com o banco de dados MySQL deve utilizar a extensão PDO com Prepared Statements e vinculação de parâmetros (`prepare` e `execute`). Consultas concatenadas com variáveis de usuário são terminantemente proibidas. |
 | **RNF04** | **Proteção contra Cross-Site Scripting (XSS)** | Todo dado fornecido por usuários e renderizado em HTML deve ser tratado com `htmlspecialchars($valor, ENT_QUOTES, 'UTF-8')`. |
 | **RNF05** | **Proteção contra Cross-Site Request Forgery (CSRF)** | Todos os formulários que realizam ações de mutação de dados (criação, edição, exclusão) devem incluir um token CSRF aleatório gerado por sessão e verificado no processamento POST. |
@@ -133,6 +133,9 @@ erDiagram
         text descricao
         longtext conteudo
         string link_externo
+        string arquivo_pdf
+        string arquivo_pdf_nome_original
+        int arquivo_pdf_tamanho
         longtext resumo_ia
         timestamp criado_em
         timestamp atualizado_em
@@ -162,8 +165,11 @@ erDiagram
    * `titulo`: VARCHAR(180), NOT NULL — Título claro do material (ex: Resumo de Sintaxe PHP e PDO).
    * `assunto`: VARCHAR(120), NOT NULL — Tópico específico (ex: PDO, Arrays, Funções).
    * `descricao`: TEXT, NOT NULL — Breve resumo explicativo do que o material contém.
-   * `conteudo`: LONGTEXT, NULL — Texto completo de estudo, apontamentos ou anotações.
-   * `link_externo`: VARCHAR(255), NULL — URL complementar (ex: link do GitHub, slides ou artigo oficial).
+   * `conteudo`: LONGTEXT, NULL — Texto completo de estudo, apontamentos ou anotações (independente).
+   * `link_externo`: VARCHAR(255), NULL — URL complementar (ex: link do GitHub, slides ou artigo oficial) (independente).
+   * `arquivo_pdf`: VARCHAR(255), NULL — Nome físico criptograficamente seguro do PDF no servidor (independente).
+   * `arquivo_pdf_nome_original`: VARCHAR(255), NULL — Nome original do arquivo enviado para exibição e download.
+   * `arquivo_pdf_tamanho`: INT UNSIGNED, NULL — Tamanho do arquivo PDF em bytes (máximo 10 MB).
    * `resumo_ia`: LONGTEXT, NULL — Conteúdo resumido gerado pelo recurso auxiliar de IA.
    * `criado_em`: DATETIME / TIMESTAMP, NOT NULL, DEFAULT CURRENT_TIMESTAMP.
    * `atualizado_em`: DATETIME / TIMESTAMP, NOT NULL, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP.
@@ -208,9 +214,9 @@ erDiagram
   * **Então** o servidor bloqueia a operação, responde com status de acesso negado (HTTP 403) e exibe mensagem de permissão insuficiente.
 
 ### CA05 — Cadastro de Material de Estudo (RF06, RF07)
-* **Dado que** um professor autenticado preenche o título, assunto, descrição, matéria e conteúdo de um material,
-* **Quando** o formulário é enviado com token CSRF válido,
-* **Então** o sistema salva o registro na tabela `materiais` vinculando `usuario_id` com o ID do professor logado, e redireciona para a lista com mensagem de sucesso.
+* **Dado que** um professor autenticado preenche o título, assunto, descrição, matéria e opcionalmente conteúdo textual, link externo e/ou anexa arquivo PDF (até 10 MB),
+* **Quando** o formulário é enviado com token CSRF válido e os dados atendem às validações,
+* **Então** o sistema armazena o anexo com nome aleatório no diretório protegido de uploads, salva o registro na tabela `materiais` vinculando `usuario_id` com o ID do professor logado, e redireciona para a visualização com mensagem de sucesso.
 
 ### CA06 — Busca e Filtragem de Materiais (RF08)
 * **Dado que** o aluno ou professor está na página de consulta e digita um termo no campo de busca ou seleciona uma matéria,
@@ -218,10 +224,10 @@ erDiagram
 * **Então** o sistema executa uma consulta preparada via PDO com filtros e exibe apenas os materiais correspondentes; caso nenhum registro seja encontrado, exibe aviso amigável "Nenhum material encontrado para esta busca".
 
 ### CA07 — Edição de Material de Estudo (RF09)
-* **Cenário 1: Professor edita material de sua autoria**
+* **Cenário 1: Professor edita material de sua autoria com anexo PDF**
   * **Dado que** o professor autor acessa a edição de um material criado por ele mesmo,
-  * **Quando** altera o título ou conteúdo e envia o formulário,
-  * **Então** o sistema valida a autoria no servidor, atualiza o registro no banco e exibe feedback de sucesso.
+  * **Quando** altera campos textuais, substitui o anexo por outro PDF válido ou opta por remover o anexo,
+  * **Então** o sistema valida a autoria, atualiza o registro no banco, remove o arquivo físico antigo apenas após a confirmação do banco e exibe feedback de sucesso.
 * **Cenário 2: Usuário tenta editar material de outro professor**
   * **Dado que** um usuário tenta enviar uma requisição de edição com o ID de um material pertencente a outro professor,
   * **Quando** o servidor processa a requisição,
@@ -230,7 +236,7 @@ erDiagram
 ### CA08 — Exclusão de Material com Confirmação (RF10)
 * **Dado que** o professor autor clica em excluir em um material de sua autoria,
 * **Quando** confirma a ação no diálogo de confirmação,
-* **Então** o sistema remove o registro do banco de dados e atualiza a listagem.
+* **Então** o sistema remove o registro do banco de dados, exclui fisicamente o arquivo PDF anexo do disco (se houver) e atualiza a listagem.
 
 ### CA09 — Geração de Resumo com Inteligência Artificial (RF11, RF12)
 * **Cenário 1: API de IA operando normalmente**

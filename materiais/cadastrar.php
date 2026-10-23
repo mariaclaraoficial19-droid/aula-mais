@@ -74,22 +74,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $erros[] = 'O link externo informado não é uma URL válida (exemplo válido: https://exemplo.com).';
     }
 
+    // Validação de anexo PDF (opcional, independente e até 10 MB)
+    $validacaoPdf = validarUploadPdf($_FILES['arquivo_pdf'] ?? null);
+    if ($validacaoPdf['tem_arquivo'] && !$validacaoPdf['valido']) {
+        $erros[] = $validacaoPdf['erro'];
+    }
+
     // 3. Persistência no Banco com Prepared Statement
     if (empty($erros)) {
+        $arquivoPdfSalvo = null;
         try {
+            if ($validacaoPdf['tem_arquivo']) {
+                $arquivoPdfSalvo = salvarUploadPdf($_FILES['arquivo_pdf']);
+            }
+
             $sqlInsert = "
-                INSERT INTO materiais (materia_id, usuario_id, titulo, assunto, descricao, conteudo, link_externo)
-                VALUES (:materia_id, :usuario_id, :titulo, :assunto, :descricao, :conteudo, :link_externo)
+                INSERT INTO materiais (materia_id, usuario_id, titulo, assunto, descricao, conteudo, link_externo, arquivo_pdf, arquivo_pdf_nome_original, arquivo_pdf_tamanho)
+                VALUES (:materia_id, :usuario_id, :titulo, :assunto, :descricao, :conteudo, :link_externo, :arquivo_pdf, :arquivo_pdf_nome_original, :arquivo_pdf_tamanho)
             ";
             $stmt = $pdo->prepare($sqlInsert);
             $stmt->execute([
-                ':materia_id'   => $materiaId,
-                ':usuario_id'   => $usuario['id'], // Registra o professor autenticado
-                ':titulo'       => $titulo,
-                ':assunto'      => $assunto,
-                ':descricao'    => $descricao,
-                ':conteudo'     => !empty($conteudo) ? $conteudo : null,
-                ':link_externo' => !empty($linkExterno) ? $linkExterno : null,
+                ':materia_id'                => $materiaId,
+                ':usuario_id'                => $usuario['id'], // Registra o professor autenticado
+                ':titulo'                    => $titulo,
+                ':assunto'                   => $assunto,
+                ':descricao'                 => $descricao,
+                ':conteudo'                  => !empty($conteudo) ? $conteudo : null,
+                ':link_externo'              => !empty($linkExterno) ? $linkExterno : null,
+                ':arquivo_pdf'               => $arquivoPdfSalvo,
+                ':arquivo_pdf_nome_original' => $validacaoPdf['tem_arquivo'] ? $validacaoPdf['nome_original'] : null,
+                ':arquivo_pdf_tamanho'       => $validacaoPdf['tem_arquivo'] ? $validacaoPdf['tamanho'] : null,
             ]);
 
             $novoId = (int)$pdo->lastInsertId();
@@ -98,8 +112,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: ' . $basePath . '/materiais/visualizar.php?id=' . $novoId);
             exit;
         } catch (Throwable $e) {
+            if ($arquivoPdfSalvo !== null) {
+                excluirArquivoPdfFisico($arquivoPdfSalvo);
+            }
             error_log("Erro ao salvar material: " . $e->getMessage());
-            $erros[] = 'Erro ao salvar o material no banco de dados.';
+            $erros[] = 'Erro ao salvar o material no banco de dados. Verifique se a migração das colunas de PDF foi executada no banco.';
         }
     }
 }
@@ -135,7 +152,7 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
         <?php endif; ?>
 
-        <form action="<?= e($basePath . '/materiais/cadastrar.php') ?>" method="POST" <?= empty($materias) ? 'style="opacity: 0.6; pointer-events: none;"' : '' ?>>
+        <form action="<?= e($basePath . '/materiais/cadastrar.php') ?>" method="POST" enctype="multipart/form-data" <?= empty($materias) ? 'style="opacity: 0.6; pointer-events: none;"' : '' ?>>
             <?= campoCsrf() ?>
 
             <div class="form-group">
@@ -182,6 +199,12 @@ require_once __DIR__ . '/../includes/header.php';
                 <input type="url" id="link_externo" name="link_externo" class="form-control" 
                        value="<?= e($linkExterno) ?>" placeholder="https://exemplo.com/slides-ou-repositorio">
                 <div class="form-help">URL para repositório do GitHub, Google Drive, slides ou artigo de referência.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="arquivo_pdf" class="form-label">Anexar Arquivo PDF (Opcional — até 10 MB)</label>
+                <input type="file" id="arquivo_pdf" name="arquivo_pdf" class="form-control" accept=".pdf,application/pdf">
+                <div class="form-help">Apostilas, listas de exercícios ou lâminas em formato .pdf (tamanho máximo: 10 MB).</div>
             </div>
 
             <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">

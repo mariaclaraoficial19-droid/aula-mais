@@ -1,7 +1,7 @@
 <?php
 /**
  * Módulo de Segurança e Utilitários Globais — Sistema Aula+ (IFRO)
- * 
+ *
  * Implementa os Requisitos Não Funcionais:
  * - RNF01: Hashing e verificação de senhas
  * - RNF02: Validação e sanitização no servidor
@@ -193,4 +193,220 @@ function getBasePath(): string
 
     $basePath = '';
     return $basePath;
+}
+
+/**
+ * Valida o arquivo PDF enviado por upload para materiais de estudo.
+ *
+ * Regras implementadas:
+ * - Opcional se não enviado (UPLOAD_ERR_NO_FILE)
+ * - Tamanho máximo: 10 MB (10.485.760 bytes)
+ * - Extensão obrigatória: .pdf (case-insensitive)
+ * - MIME type: application/pdf verificado via finfo
+ * - Assinatura do arquivo: cabeçalho mágico %PDF-
+ *
+ * @param array|null $arquivo Vetor vindo de $_FILES['arquivo_pdf']
+ * @return array ['tem_arquivo' => bool, 'valido' => bool, 'erro' => string|null, 'nome_original' => string, 'tamanho' => int]
+ */
+function validarUploadPdf(?array $arquivo): array
+{
+    if (!$arquivo || !isset($arquivo['error']) || $arquivo['error'] === UPLOAD_ERR_NO_FILE) {
+        return [
+            'tem_arquivo'   => false,
+            'valido'        => true,
+            'erro'          => null,
+            'nome_original' => '',
+            'tamanho'       => 0,
+        ];
+    }
+
+    // Tratamento de erros de upload do próprio PHP
+    if ($arquivo['error'] !== UPLOAD_ERR_OK) {
+        $msgErro = match ($arquivo['error']) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'O arquivo PDF enviado excede o limite máximo permitido de 10 MB.',
+            UPLOAD_ERR_PARTIAL    => 'O upload do arquivo foi interrompido antes de ser concluído. Tente novamente.',
+            UPLOAD_ERR_NO_TMP_DIR => 'Falha interna do servidor: diretório temporário não configurado.',
+            UPLOAD_ERR_CANT_WRITE => 'Falha interna do servidor: não foi possível gravar o arquivo temporário no disco.',
+            default               => 'Ocorreu um erro inesperado no envio do arquivo PDF (Código: ' . $arquivo['error'] . ').',
+        };
+        return [
+            'tem_arquivo'   => true,
+            'valido'        => false,
+            'erro'          => $msgErro,
+            'nome_original' => (string)($arquivo['name'] ?? ''),
+            'tamanho'       => (int)($arquivo['size'] ?? 0),
+        ];
+    }
+
+    // 1. Limite estrito de 10 MB (10 * 1024 * 1024 = 10.485.760 bytes)
+    $limiteMaximoBytes = 10 * 1024 * 1024;
+    $tamanho = (int)($arquivo['size'] ?? 0);
+
+    if ($tamanho <= 0) {
+        return [
+            'tem_arquivo'   => true,
+            'valido'        => false,
+            'erro'          => 'O arquivo enviado está vazio (0 bytes).',
+            'nome_original' => (string)($arquivo['name'] ?? ''),
+            'tamanho'       => $tamanho,
+        ];
+    }
+
+    if ($tamanho > $limiteMaximoBytes) {
+        return [
+            'tem_arquivo'   => true,
+            'valido'        => false,
+            'erro'          => 'O arquivo PDF excede o tamanho máximo de 10 MB (tamanho enviado: ' . formatarTamanhoBytes($tamanho) . ').',
+            'nome_original' => (string)($arquivo['name'] ?? ''),
+            'tamanho'       => $tamanho,
+        ];
+    }
+
+    // 2. Validação da extensão (.pdf)
+    $nomeOriginal = (string)($arquivo['name'] ?? '');
+    $extensao = strtolower(pathinfo($nomeOriginal, PATHINFO_EXTENSION));
+    if ($extensao !== 'pdf') {
+        return [
+            'tem_arquivo'   => true,
+            'valido'        => false,
+            'erro'          => 'Formato de arquivo inválido. Apenas documentos com extensão .pdf são aceitos.',
+            'nome_original' => $nomeOriginal,
+            'tamanho'       => $tamanho,
+        ];
+    }
+
+    // 3. Validação real do MIME Type via finfo
+    $tmpPath = (string)($arquivo['tmp_name'] ?? '');
+    if (!is_uploaded_file($tmpPath)) {
+        return [
+            'tem_arquivo'   => true,
+            'valido'        => false,
+            'erro'          => 'Tentativa inválida de upload de arquivo.',
+            'nome_original' => $nomeOriginal,
+            'tamanho'       => $tamanho,
+        ];
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mimeType = $finfo ? finfo_file($finfo, $tmpPath) : false;
+    if ($finfo) {
+        finfo_close($finfo);
+    }
+
+    if ($mimeType !== 'application/pdf') {
+        return [
+            'tem_arquivo'   => true,
+            'valido'        => false,
+            'erro'          => 'O conteúdo do arquivo não foi identificado como um PDF válido (tipo detectado: ' . ($mimeType ?: 'desconhecido') . ').',
+            'nome_original' => $nomeOriginal,
+            'tamanho'       => $tamanho,
+        ];
+    }
+
+    // 4. Validação da Assinatura do Arquivo (Magic Bytes %PDF-)
+    $handle = @fopen($tmpPath, 'rb');
+    if (!$handle) {
+        return [
+            'tem_arquivo'   => true,
+            'valido'        => false,
+            'erro'          => 'Não foi possível ler o arquivo enviado para verificação de integridade.',
+            'nome_original' => $nomeOriginal,
+            'tamanho'       => $tamanho,
+        ];
+    }
+
+    $assinatura = fread($handle, 5);
+    fclose($handle);
+
+    if ($assinatura !== '%PDF-') {
+        return [
+            'tem_arquivo'   => true,
+            'valido'        => false,
+            'erro'          => 'O arquivo enviado não possui o cabeçalho oficial de um documento PDF (%PDF-).',
+            'nome_original' => $nomeOriginal,
+            'tamanho'       => $tamanho,
+        ];
+    }
+
+    // Sanitiza o nome original para exibição e download seguro
+    $nomeOriginalSanitizado = preg_replace('/[^\p{L}\p{N}\s._\-\(\)]/u', '_', $nomeOriginal);
+    if (empty($nomeOriginalSanitizado)) {
+        $nomeOriginalSanitizado = 'material.pdf';
+    }
+
+    return [
+        'tem_arquivo'   => true,
+        'valido'        => true,
+        'erro'          => null,
+        'nome_original' => $nomeOriginalSanitizado,
+        'tamanho'       => $tamanho,
+    ];
+}
+
+/**
+ * Salva um arquivo PDF validado no diretório seguro de uploads com nome criptograficamente aleatório.
+ *
+ * @param array $arquivo Vetor vindo de $_FILES['arquivo_pdf']
+ * @return string Nome físico único gerado (ex: pdf_xxx.pdf)
+ */
+function salvarUploadPdf(array $arquivo): string
+{
+    $dir = __DIR__ . '/../uploads/materiais';
+    if (!is_dir($dir)) {
+        if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new RuntimeException("Não foi possível criar o diretório de uploads no servidor.");
+        }
+    }
+
+    $nomeFisico = 'pdf_' . bin2hex(random_bytes(16)) . '.pdf';
+    $destino = $dir . DIRECTORY_SEPARATOR . $nomeFisico;
+
+    if (!move_uploaded_file($arquivo['tmp_name'], $destino)) {
+        throw new RuntimeException("Falha ao mover o arquivo enviado para o diretório de armazenamento.");
+    }
+
+    return $nomeFisico;
+}
+
+/**
+ * Remove com segurança um arquivo PDF físico do disco (evita arquivos órfãos).
+ *
+ * @param string|null $nomeFisico Nome do arquivo físico
+ */
+function excluirArquivoPdfFisico(?string $nomeFisico): void
+{
+    if (empty($nomeFisico)) {
+        return;
+    }
+
+    $nomeLimpo = basename($nomeFisico);
+    $caminho = __DIR__ . '/../uploads/materiais' . DIRECTORY_SEPARATOR . $nomeLimpo;
+
+    if (file_exists($caminho) && is_file($caminho)) {
+        @unlink($caminho);
+    }
+}
+
+/**
+ * Formata um valor em bytes para exibição amigável (ex: 2.5 MB, 340 KB).
+ *
+ * @param int|null $bytes Tamanho em bytes
+ * @return string Texto formatado
+ */
+function formatarTamanhoBytes(?int $bytes): string
+{
+    if ($bytes === null || $bytes <= 0) {
+        return '0 B';
+    }
+
+    $unidades = ['B', 'KB', 'MB', 'GB'];
+    $i = 0;
+    $tamanho = (float)$bytes;
+
+    while ($tamanho >= 1024 && $i < count($unidades) - 1) {
+        $tamanho /= 1024;
+        $i++;
+    }
+
+    return number_format($tamanho, ($i === 0 ? 0 : 1), ',', '.') . ' ' . $unidades[$i];
 }

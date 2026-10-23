@@ -23,8 +23,7 @@ $material = null;
 try {
     $pdo = getDatabaseConnection();
     $sql = "
-        SELECT m.id, m.materia_id, m.usuario_id, m.titulo, m.assunto, m.descricao,
-               m.conteudo, m.link_externo, m.resumo_ia, m.criado_em, m.atualizado_em,
+        SELECT m.*,
                mat.nome AS materia_nome,
                u.nome AS professor_nome,
                u.email AS professor_email
@@ -82,7 +81,7 @@ require_once __DIR__ . '/../includes/header.php';
                     <form action="<?= e($basePath . '/materiais/excluir.php') ?>" method="POST" style="display: inline-block;">
                         <?= campoCsrf() ?>
                         <input type="hidden" name="id" value="<?= e($material['id']) ?>">
-                        <button type="submit" class="btn btn-danger btn-sm" 
+                        <button type="submit" class="btn btn-danger btn-sm"
                                 data-confirm="Tem certeza de que deseja excluir permanentemente este material?">
                             🗑 Excluir
                         </button>
@@ -122,13 +121,42 @@ require_once __DIR__ . '/../includes/header.php';
         </section>
     <?php endif; ?>
 
+    <!-- Documento Anexo em PDF -->
+    <?php if (!empty($material['arquivo_pdf'])): ?>
+        <section style="margin-bottom: 2rem;">
+            <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+                <span>📄</span> Material Anexo (Documento PDF)
+            </h2>
+            <div style="background: #f8fafc; border: 1px solid var(--border-color); border-left: 4px solid var(--accent); padding: 1.25rem; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <strong style="color: var(--text-main); font-size: 1.05rem; display: block; margin-bottom: 0.25rem;">
+                        <?= e($material['arquivo_pdf_nome_original']) ?>
+                    </strong>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">
+                        Documento PDF &bull; Tamanho: <?= formatarTamanhoBytes((int)$material['arquivo_pdf_tamanho']) ?>
+                    </span>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <a href="<?= e($basePath . '/materiais/download.php?id=' . $material['id']) ?>"
+                       target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
+                        👁 Abrir PDF
+                    </a>
+                    <a href="<?= e($basePath . '/materiais/download.php?id=' . $material['id'] . '&download=1') ?>"
+                       class="btn btn-secondary btn-sm">
+                        ⬇ Baixar
+                    </a>
+                </div>
+            </div>
+        </section>
+    <?php endif; ?>
+
     <!-- Link Externo de Apoio -->
     <?php if (!empty($material['link_externo'])): ?>
         <section style="margin-bottom: 2rem;">
             <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-main);">
                 Material Complementar / Link Externo
             </h2>
-            <a href="<?= e($material['link_externo']) ?>" target="_blank" rel="noopener noreferrer" 
+            <a href="<?= e($material['link_externo']) ?>" target="_blank" rel="noopener noreferrer"
                class="btn btn-secondary" style="display: inline-flex; gap: 0.5rem;">
                 🔗 Acessar Link Externo: <?= e($material['link_externo']) ?> &rarr;
             </a>
@@ -146,7 +174,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <form action="<?= e($basePath . '/materiais/gerar_resumo.php') ?>" method="POST" style="margin: 0;">
                     <?= campoCsrf() ?>
                     <input type="hidden" name="id" value="<?= e($material['id']) ?>">
-                    <button type="submit" class="btn btn-sm btn-secondary" 
+                    <button type="submit" class="btn btn-sm btn-secondary"
                             data-confirm="Deseja solicitar uma nova versão do resumo para este material?">
                         🔄 Atualizar Resumo com IA
                     </button>
@@ -179,7 +207,7 @@ require_once __DIR__ . '/../includes/header.php';
                     </p>
                 <?php else: ?>
                     <p style="font-size: 0.85rem; color: var(--text-muted);">
-                        <a href="<?= e($basePath . '/auth/login.php') ?>" style="color: var(--primary); font-weight: 600;">Faça login</a> 
+                        <a href="<?= e($basePath . '/auth/login.php') ?>" style="color: var(--primary); font-weight: 600;">Faça login</a>
                         para gerar resumos inteligentes e estudar este conteúdo.
                     </p>
                 <?php endif; ?>
