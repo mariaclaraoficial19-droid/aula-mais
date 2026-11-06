@@ -274,3 +274,7 @@ Em conformidade com o planejamento acadêmico:
 * **Ambiente de Desenvolvimento, Execução e Avaliação:** O sistema será desenvolvido, executado e testado localmente através do **XAMPP (Apache e MySQL)** no Windows.
 * **Repositório e Entrega de Código:** O código-fonte será integralmente versionado com **Git** e armazenado em repositório no **GitHub**, contendo commits atômicos, descritivos e histórico rastreável.
 * **Publicação Externa (Hospedagem):** Nenhuma hospedagem remota externa foi definida como definitiva neste momento. Caso o professor formalize a exigência de um link público ativo para a avaliação, a opção recomendada (Render + banco MySQL em nuvem) será ativada sem qualquer impacto na arquitetura do código.
+
+* ## Repositório do projeto
+
+**GitHub:** https://github.com/mariaclaraoficial19-droid/aula-mais
