@@ -64,7 +64,8 @@ O formato baseia-se no [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0
 - **Modelo de Ambiente Local (`config/local_env.example.php`):** Arquivo modelo documentando como declarar a chave `GEMINI_API_KEY` de forma segura, mantendo-a fora do controle de versão do Git.
 
 ## [0.5.0] - 2026-10-23
-
+### Decisões de Escopo
+- **Ampliação do armazenamento de materiais:** O escopo inicial previa apenas textos e links externos. Durante o desenvolvimento, foi identificada a necessidade de permitir anexos em PDF, ampliando as possibilidades de compartilhamento de conteúdos de estudo.
 ### Adicionado (Anexos em PDF e Gestão de Documentos)
 - **Anexo de Arquivos PDF (até 10 MB):** Suporte completo para anexar documentos em formato PDF aos materiais de estudo com funcionamento 100% independente dos campos de conteúdo textual e links externos.
 - **Validação Rigorosa de Uploads (`includes/security.php`):**
