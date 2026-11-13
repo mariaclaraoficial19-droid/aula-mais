@@ -69,6 +69,8 @@ O formato baseia-se no [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0
 - **Ampliação do armazenamento de materiais:** O escopo inicial previa apenas textos e links externos. Durante o desenvolvimento, foi identificada a necessidade de permitir anexos em PDF, ampliando as possibilidades de compartilhamento de conteúdos de estudo.
 
 ### Adicionado (Anexos em PDF e Gestão de Documentos)
+>>>>>>> 82ca31b9d217cb3126f210adc618e7f1b8bce8e2
+### Adicionado (Anexos em PDF e Gestão de Documentos)
 - **Anexo de Arquivos PDF (até 10 MB):** Suporte completo para anexar documentos em formato PDF aos materiais de estudo com funcionamento 100% independente dos campos de conteúdo textual e links externos.
 - **Validação Rigorosa de Uploads (`includes/security.php`):**
   - Limite estrito de 10 MB (`10.485.760 bytes`).
